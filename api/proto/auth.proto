@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package auth;
+option go_package = "github.com/automatedtomato/grpc-auth-service/api/proto";
+
+// Define authentication service
+service AuthService {
+    // User registration
+    rpc Register(RegisterRequest) returns (RegisterResponse) {}
+
+    // Login
+    rpc Login(LoginRequest) returns (LoginResponse) {}
+
+    // Password reset request
+    rpc RequestPasswordReset(PasswordResetRequest) returns (PasswordResetResponse) {}
+
+    // Execute password reset
+    rpc ResetPassword (NewPasswordRequest) returns (NewPasswordResponse) {}
+
+    // Get user info
+    rpc GetUserInfo (UserInfoRequest) returns (UserInfoResponse) {}
+}
+
+// Registration request
+message RegisterRequest {
+    string username = 1;
+    string email = 2;
+    string password = 3;
+}
+
+// Registration request
+message RegisterResponse {
+    bool success = 1;
+    string message = 2;
+    string user_id = 3;
+}
+
+// Login  request
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+}
+
+// Login response
+message LoginResponse {
+    bool success = 1;
+    string message = 2;
+    string session_token = 3;
+}
+
+// Password reset request
+message PasswordResetRequest {
+    string email = 1;
+}
+
+// Password reset response
+message PasswordResetResponse {
+    bool success = 1;
+    string message = 2;
+    string session_token = 3;
+}
+
+// New password request
+message NewPasswordRequest {
+    string reset_token = 1;
+    string new_password =2;
+}
+
+// New password response
+message NewPasswordResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// User info request
+message UserInfoRequest {
+    string session_token = 1;
+}
+
+// User info response
+message UserInfoResponse {
+    bool success = 1;
+    string message = 2;
+    string user_id = 3;
+    string username = 4;
+    string email = 5;
+}

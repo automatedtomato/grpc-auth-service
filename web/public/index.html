@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>認証サービス</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .tab-content {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-top: -1px;
+        }
+    </style>
+</head>
+<body>
+    <h1>認証サービス</h1>
+    
+    <div class="tabs">
+        <div class="tab active" data-tab="register">登録</div>
+        <div class="tab" data-tab="login">ログイン</div>
+        <div class="tab" data-tab="reset">パスワードリセット</div>
+        <div class="tab" data-tab="userinfo">ユーザー情報</div>
+    </div>
+    
+    <div class="message hidden" id="message"></div>
+    
+    <div class="tab-content" id="register-tab">
+        <h2>新規ユーザー登録</h2>
+        <form id="register-form">
+            <div class="form-group">
+                <label for="reg-username">ユーザー名:</label>
+                <input type="text" id="reg-username" required>
+            </div>
+            <div class="form-group">
+                <label for="reg-email">メールアドレス:</label>
+                <input type="email" id="reg-email" required>
+            </div>
+            <div class="form-group">
+                <label for="reg-password">パスワード:</label>
+                <input type="password" id="reg-password" required>
+            </div>
+            <button type="submit">登録</button>
+        </form>
+    </div>
+    
+    <div class="tab-content hidden" id="login-tab">
+        <h2>ログイン</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="login-username">ユーザー名:</label>
+                <input type="text" id="login-username" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">パスワード:</label>
+                <input type="password" id="login-password" required>
+            </div>
+            <button type="submit">ログイン</button>
+        </form>
+    </div>
+    
+    <div class="tab-content hidden" id="reset-tab">
+        <h2>パスワードリセット</h2>
+        <form id="reset-request-form">
+            <div class="form-group">
+                <label for="reset-email">メールアドレス:</label>
+                <input type="email" id="reset-email" required>
+            </div>
+            <button type="submit">リセットリンクを送信</button>
+        </form>
+        
+        <div id="reset-token-form" class="hidden">
+            <h3>新しいパスワードを設定</h3>
+            <form id="new-password-form">
+                <div class="form-group">
+                    <label for="reset-token">リセットトークン:</label>
+                    <input type="text" id="reset-token" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">新しいパスワード:</label>
+                    <input type="password" id="new-password" required>
+                </div>
+                <button type="submit">パスワードを更新</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="tab-content hidden" id="userinfo-tab">
+        <h2>ユーザー情報</h2>
+        <div id="user-info-content">
+            <p>ログインしていません。ログインするとユーザー情報が表示されます。</p>
+        </div>
+    </div>
+
+    <script>
+        // セッション情報
+        let sessionToken = localStorage.getItem('sessionToken');
+        
+        // タブ切り替え処理
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+                
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-tab').classList.remove('hidden');
+                
+                // ユーザー情報タブを選択した場合は情報を更新
+                if (tab.dataset.tab === 'userinfo' && sessionToken) {
+                    getUserInfo();
+                }
+            });
+        });
+        
+        // メッセージ表示関数
+        function showMessage(text, isSuccess) {
+            const msgElement = document.getElementById('message');
+            msgElement.textContent = text;
+            msgElement.classList.remove('hidden', 'success', 'error');
+            msgElement.classList.add(isSuccess ? 'success' : 'error');
+            
+            // 5秒後にメッセージを非表示
+            setTimeout(() => {
+                msgElement.classList.add('hidden');
+            }, 5000);
+        }
+        
+        // 登録フォーム送信処理
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            
+            try {
+                const response = await fetch('/auth.AuthService/Register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(data.message, true);
+                    document.getElementById('register-form').reset();
+                } else {
+                    showMessage(data.message, false);
+                }
+            } catch (error) {
+                showMessage('エラーが発生しました: ' + error.message, false);
+            }
+        });
+        
+        // ログインフォーム送信処理
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await fetch('/auth.AuthService/Login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(data.message, true);
+                    sessionToken = data.session_token;
+                    localStorage.setItem('sessionToken', sessionToken);
+                    document.getElementById('login-form').reset();
+                    
+                    // ユーザー情報タブに切り替え
+                    document.querySelector('.tab[data-tab="userinfo"]').click();
+                } else {
+                    showMessage(data.message, false);
+                }
+            } catch (error) {
+                showMessage('エラーが発生しました: ' + error.message, false);
+            }
+        });
+        
+        // パスワードリセットリクエスト処理
+        document.getElementById('reset-request-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('reset-email').value;
+            
+            try {
+                const response = await fetch('/auth.AuthService/RequestPasswordReset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(data.message, true);
+                    document.getElementById('reset-token').value = data.reset_token;
+                    document.getElementById('reset-token-form').classList.remove('hidden');
+                } else {
+                    showMessage(data.message, false);
+                }
+            } catch (error) {
+                showMessage('エラーが発生しました: ' + error.message, false);
+            }
+        });
+        
+        // 新パスワード設定処理
+        document.getElementById('new-password-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const resetToken = document.getElementById('reset-token').value;
+            const newPassword = document.getElementById('new-password').value;
+            
+            try {
+                const response = await fetch('/auth.AuthService/ResetPassword', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        reset_token: resetToken,
+                        new_password: newPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(data.message, true);
+                    document.getElementById('new-password-form').reset();
+                    document.getElementById('reset-token-form').classList.add('hidden');
+                    
+                    // ログインタブに切り替え
+                    document.querySelector('.tab[data-tab="login"]').click();
+                } else {
+                    showMessage(data.message, false);
+                }
+            } catch (error) {
+                showMessage('エラーが発生しました: ' + error.message, false);
+            }
+        });
+        
+        // ユーザー情報取得処理
+        async function getUserInfo() {
+            if (!sessionToken) {
+                document.getElementById('user-info-content').innerHTML = '<p>ログインしていません。ログインするとユーザー情報が表示されます。</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/auth.AuthService/GetUserInfo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_token: sessionToken
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('user-info-content').innerHTML = `
+                        <p><strong>ユーザーID:</strong> ${data.user_id}</p>
+                        <p><strong>ユーザー名:</strong> ${data.username}</p>
+                        <p><strong>メールアドレス:</strong> ${data.email}</p>
+                        <button id="logout-button">ログアウト</button>
+                    `;
+                    
+                    // ログアウトボタンのイベント設定
+                    document.getElementById('logout-button').addEventListener('click', () => {
+                        sessionToken = null;
+                        localStorage.removeItem('sessionToken');
+                        showMessage('ログアウトしました', true);
+                        document.getElementById('user-info-content').innerHTML = '<p>ログインしていません。ログインするとユーザー情報が表示されます。</p>';
+                        
+                        // ログインタブに切り替え
+                        document.querySelector('.tab[data-tab="login"]').click();
+                    });
+                } else {
+                    document.getElementById('user-info-content').innerHTML = '<p>セッションが無効です。再度ログインしてください。</p>';
+                    sessionToken = null;
+                    localStorage.removeItem('sessionToken');
+                }
+            } catch (error) {
+                showMessage('エラーが発生しました: ' + error.message, false);
+            }
+        }
+        
+        // ページ読み込み時にセッションがあればユーザー情報を取得
+        if (sessionToken) {
+            getUserInfo();
+        }
+    </script>
+</body>
+</html>
